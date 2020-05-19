@@ -1,24 +1,29 @@
 import sys
 
+# Given a list of keys, finds matches in a file
+#  - key_list contains keys or hashes from an individual
+#  - test_file contains keys (with group keys) for individual(s) who have "tested positive"
+#  - test_file contains a key and group key on each line separated by a colon
 def findMatches(key_list,test_file):
     print("Looking for a match in this group {}".format(key_list))
     with open(test_file, "r") as f_test:
         test_current_group_key = ''
-        test_group_count = 0
-        test_group_matches = 0
-        #TODO: need to keep track of how many matches per group
+        test_group_count = 0 # number of keys in current test group
+        test_group_matches = 0 # number of matching keys in current test group
         for line in f_test:
             current_line_keys = line.strip('\n').split(':')
-            if current_line_keys[1] != test_current_group_key: # new group
-                if test_group_count > 0:
-                    print("")
+            if current_line_keys[1] != test_current_group_key: # then this is a new group
+                if test_group_count > 0: # then this is an actual group (not just the start)
+                    print("Group {} contains {}/{} matches\n".format(test_current_group_key,
+                                                              test_group_matches,test_group_count))
+                # reset for new group
                 test_group_count = 0
+                test_group_matches = 0
                 test_current_group_key = current_line_keys[1] # set current group key
             else:
                 test_group_count += 1
-
             if current_line_keys[0] in key_list:
-                print(line)
+                test_group_matches += 1
 
     return 0
 
