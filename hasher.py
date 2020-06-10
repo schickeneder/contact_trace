@@ -1,7 +1,11 @@
 import time, hashlib, os
-
+#TODO: hash groups of APs at the same time for a given key
+# hash of top 3 access points good enough?
+# maybe order hashes in order of decreasing rss?
+# how accurate are these as measures of distance between individuals? How to test?
+# false positives = says you came in contact but actual distances are too far to be concerning
 pattern = '%Y-%m-%d %H:%M:%S'
-group_span = 100 # seconds
+group_span = 10 # seconds
 
 #in_files = ['20200507_capture_axon7.csv','20200507_capture_pixel3a.csv','20200507_capture_trackphone.csv']
 #out_files = ['hash1_axon7', 'hash2_pixel3a', 'hash3_track']
