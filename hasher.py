@@ -7,10 +7,10 @@ import time, hashlib, os
 pattern = '%Y-%m-%d %H:%M:%S'
 group_span = 10 # seconds
 
-#in_files = ['20200507_capture_axon7.csv','20200507_capture_pixel3a.csv','20200507_capture_trackphone.csv']
-#out_files = ['hash1_axon7', 'hash2_pixel3a', 'hash3_track']
-in_files = []
-out_files = []
+in_files = ['walk_dual_colocated_axon_converted.csv','walk_dual_colocated_pixel_converted.csv']
+out_files = ['hash1_axon7.hash', 'hash2_pixel3a.hash']
+#in_files = []
+#out_files = []
 
 # generate appropriate file names if none provided
 if not in_files:

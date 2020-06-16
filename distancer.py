@@ -1,5 +1,10 @@
 import sys, csv, math
 
+# opens and parses a .csv file containing GPS locations and WiFi AP measurements
+#   - sorts input file based on timestamp
+#   - prints stats based on scans between location measurements
+
+
 # - open a CSV file
 # - read all lines into memory
 # - sort all entries by uptime timestamp (if this gets too big, may need to move that to disk eventually)
@@ -22,8 +27,8 @@ import sys, csv, math
 # which performs better on average? two pair or 3 pair? how much more security to we gain by doing that?
 # what about hashing all of them above some threshold RSSI? xoring in addition to ordered
 # for this case a unique hash would be better, but would the collision-based approach provide better privacy?
-time_between_limit = 2000 #milliseconds
-distance_between_limit = 0 # meters
+time_between_limit = 3000 #milliseconds
+distance_between_limit = 2 # meters
 R = 6373000.0 # approximate radius of earth in meters
 	#Equatorial radius (km)	        6378.137
 	#Polar radius (km)               6356.752
@@ -137,7 +142,7 @@ with open("time_sorted.csv","r",errors="ignore") as f_my: # some bad chars so ne
                     distance_between > distance_between_limit:
                 prev_location_time = int(current_line[1])
                 print("-----------New location, AP diffs---------------")
-                print("Current location: {} at time {}".format(current_location,int(current_line[1])))
+                print("Current location: {} at time {}".format(current_location,int(current_line[2])))
                 print("New APs:--------------")
                 for BSSID in current_AP_group:
                     if BSSID not in prev_AP_group:
