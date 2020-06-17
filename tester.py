@@ -1,5 +1,7 @@
 import sys
 
+# todo: also should write script to sync location with time for two entries to see how many *should* match
+
 # Given a list of keys, finds matches in a file
 #  - key_list contains keys or hashes from an individual
 #  - test_file contains keys (with group keys) for individual(s) who have "tested positive"

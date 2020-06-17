@@ -5,7 +5,7 @@ import time, hashlib, os
 # how accurate are these as measures of distance between individuals? How to test?
 # false positives = says you came in contact but actual distances are too far to be concerning
 pattern = '%Y-%m-%d %H:%M:%S'
-group_span = 10 # seconds
+group_span = 5 # seconds
 
 in_files = ['walk_dual_colocated_axon_converted.csv','walk_dual_colocated_pixel_converted.csv']
 out_files = ['hash1_axon7.hash', 'hash2_pixel3a.hash']
