@@ -1,9 +1,16 @@
-import sys
+import sys, csv
 # purpose of this program is to compare the capture logs grouped by user-defined time intervals and vary the offset
 # to find the optimal synchronization based on visible APs rather than GPS, indicating a best case matching scenario
 
-# currently uses the newer format..
+# TODO:
+#   -group only those with RSSI > N
+#   -group only top 50% of APs by RSSI
+#   -group only bottom 50% (or 20%?) of APs by RSSI - idea being that those will drop out quicker
+#   -group onl thos with RSSI < N - similar idea as above, see which performs better..
+#   -maybe split into two groups, top 50% for general area, bottom x% for finer resolution?
+#   -which results create more unique per group?
 
+# currently uses the newer format..
 pattern = '%Y-%m-%d %H:%M:%S'
 
 def takeSecond(list):
@@ -87,6 +94,7 @@ def time_compare(entries1, entries2, step=5000, defined_offset=0):
         prev_slice = time_slice
 
     # report final numbers
+    """
     print("Summary---------------------------------------------")
     print("Step size: {} ms".format(step))
     print("Original offset, defined offset : {},{}".format((offset-defined_offset), defined_offset))
@@ -94,6 +102,12 @@ def time_compare(entries1, entries2, step=5000, defined_offset=0):
     print("Average Match Percentage: {}".format(total_matches/total_min_group))
     print("Total Group Discrepancy / Number of Groups: {}/{}".format(total_group_discrepancy,number_of_groups))
     print("Average Group Discrepancy: {}".format(total_group_discrepancy/number_of_groups))
+    """
+    # abbreviated, for file output
+    #print("{},{},{}".format(step,defined_offset,total_matches/total_min_group))
+    with open(outfile,"a",newline="") as f_out:
+        out_write = csv.writer(f_out, delimiter=",")
+        out_write.writerow((step,defined_offset,(total_matches/total_min_group)))
 
     return total_matches, average_matches
 
@@ -132,7 +146,10 @@ except AssertionError as error:
     print("Invalid syntax: "+str(error))
     sys.exit(-1)
 
+outfile = "time_comp_log_" + file1.split('.')[0] + "_" + file2.split('.')[0]
+with open(outfile, "w"): pass # clear contents of old file
+
 entries1, entries2 = compare_files(file1,file2)
 for step in range(1000,5000,1000):
-    for offset in range(-2000,2000,500):
+    for offset in range(0,400000,1000):
         time_compare(entries1,entries2,step,offset)
