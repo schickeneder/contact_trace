@@ -63,14 +63,17 @@ def normalize_group(group):
         try:
             tmp_norm = (int(item[-1]) - int(min_RSSI[-1])) / (int(max_RSSI[-1]) - int(min_RSSI[-1]))
         except:
-            tmp_norm = 10
-        new_group.append((item[0], round(tmp_norm * scale_factor)))
+            tmp_norm = -90
+        new_group.append((item[0], tmp_norm))
 
     return new_group
 
 #--------------------------------------------------
 # TODO: if no matches, e.g. empty vector, will try to divide by zero?
 def euclidean_distance(vec1,vec2):
+    scale = len(vec1)
+    if not scale:
+        scale = 1
     return math.sqrt(sum([(a-b) ** 2 for a,b in zip(vec1,vec2)]))
 
 #--------------------------------------------------
@@ -106,13 +109,15 @@ def count_normalized_euclidean_match(group1,group2):
 
     tmp = euclidean_distance(tuple(group1_vector),tuple(group2_vector))
 
+    """
     print('\033[95m',group1_BSSID_RSSI_norm)
     print('\033[94m',group2_BSSID_RSSI_norm)
     print('\033[95m',group1_BSSID_RSSI)
     print('\033[94m',group2_BSSID_RSSI)
     print('\033[95m',group1_vector)
     print('\033[94m',group2_vector)
-    return tmp
+    """
+    return tmp, len(group1_vector)
 
 
 # --------------------------------------------------
@@ -131,6 +136,7 @@ def time_compare(entries1, entries2, step=5000, defined_offset=0):
     file1_time_anchor = (0,0) # relative time ms, epoch time ms
     file2_time_anchor = (0,0)
     total_euclid_distance = 0
+    breakdown = {}
     # start the first group with timestamp of first entry from file1, this must be done with GPS
     for entry1 in entries1:
         if entry1[0] == "GPS":
@@ -172,8 +178,13 @@ def time_compare(entries1, entries2, step=5000, defined_offset=0):
         # metrics.. but only count if two groups are present, e.g. a scan was performed during that time step
         if group1 and group2:
             current_matches = count_BSSID_matches(group1,group2)
-            current_euclid_distance = count_normalized_euclidean_match(group1,group2)
-            print(current_euclid_distance)
+            current_euclid_distance, dim = count_normalized_euclidean_match(group1,group2)
+            if dim in breakdown:
+                breakdown[dim][0] += 1 # increment group count for this dimension
+                breakdown[dim][1] += current_euclid_distance # accumulate total euclid dist for this dimension
+            else:
+                breakdown[dim] = [1,current_euclid_distance]
+            #print(current_euclid_distance)
             #print("Group1,Group2, matches: {},{},{}".format(len(group1),len(group2),current_matches))
             total_min_group += min(len(group1), len(group2))
             total_matches += current_matches
@@ -198,9 +209,12 @@ def time_compare(entries1, entries2, step=5000, defined_offset=0):
     """
     # abbreviated, for file output
     #print("{},{},{}".format(step,defined_offset,total_matches/total_min_group))
+    new_breakdown = {}
+    for key in breakdown:
+        new_breakdown[key] = breakdown[key][1]/breakdown[key][0]
     with open(outfile,"a",newline="") as f_out:
         out_write = csv.writer(f_out, delimiter=",")
-        out_write.writerow((step,defined_offset,(total_matches/total_min_group),total_euclid_distance/number_of_groups))
+        out_write.writerow((step,defined_offset,(total_matches/total_min_group),total_euclid_distance/number_of_groups,sorted(new_breakdown.items(),reverse=True)))
 
     return total_matches, average_matches
 
@@ -231,6 +245,9 @@ def compare_files(file1,file2):
             pass
     return entries1, entries2
 
+# ===========================================================================
+# ===========================================================================
+
 try:
     assert (len(sys.argv) >= 3), "at least 2 file arguments required\n"
     file1 = str(sys.argv[1])
@@ -240,9 +257,6 @@ try:
         RSSI_difference_enabled = True
     except:
         pass
-
-# ===========================================================================
-# ===========================================================================
 
 except AssertionError as error:
     print("Invalid syntax: "+str(error))
@@ -255,6 +269,6 @@ entries1, entries2 = compare_files(file1,file2)
 
 for step in range(5000,10000,5000):
     print("Computing step: {}".format(step))
-    for offset in range(0,10000,5000):
+    for offset in range(0,120000,5000):
         print("Computing offset: {}".format(offset))
         time_compare(entries1,entries2,step,offset)
