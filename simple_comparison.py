@@ -171,8 +171,10 @@ def main():
         print("Invalid syntax: " + str(error))
         sys.exit(-1)
 
+    # first file
     entries1 = read_sort_file(file1, time_elem)
     groups1 = into_groups(entries1,5000,time_elem)
+    # second file
     entries2 = read_sort_file(file2, time_elem)
     groups2 = into_groups(entries2,5000,time_elem)
     #print("Self-matching------------------------")
