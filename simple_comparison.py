@@ -110,7 +110,7 @@ def match_groups(groups1,groups2, mode="BSSID"):
 # note: if it seems too big, there may be some odd entries at the end of the file that may need to be removed
 def get_time_span(entries, elem = 1):
     try:
-        return int(min(entries, key = lambda g: g[elem])[elem]), int(max(entries, key = lambda g: g[elem])[elem])
+        return int(min(entries, key = lambda g: int(g[elem]))[elem]), int(max(entries, key = lambda g: int(g[elem]))[elem])
     except Exception as e:
         print("Exception: {} for entries".format(e))
         sys.exit(-1)
@@ -120,6 +120,7 @@ def into_groups(entries,step=5000, elem = 1):
     groups = []
     prev_slice = 0
     start, stop = get_time_span(entries, elem)
+    #print(start,stop, entries)
 
     for time_slice in range(start, stop, step):
         group = []
@@ -140,18 +141,17 @@ def into_groups(entries,step=5000, elem = 1):
 #--------------------------------------------------
 # reads in up to two files, sorts based on (default) second element and then returns the two lists
 def read_sort_file(file, elem = 1):
-    print("Sorting inputs..")
+    print("Sorting inputs for {}..".format(file))
     entries = [] # stores sorted contents of file in original format and sorts
     with open(file, "r", errors="ignore") as f_my:
         try:
             for line in f_my:
                 entries.append(tuple(line.strip("\n").split(',')[:5]))
-            entries.sort(key=lambda k: k[elem])
+            entries.sort(key=lambda k: int(k[elem]))
         except Exception as e:
             print("error {} in line \'{}\', ignoring ".format(e, str(line)))
             print("Probably appears because of trailing newlines in file")
             pass
-
     return entries
 
 # ===========================================================================
@@ -173,16 +173,17 @@ def main():
 
     # first file
     entries1 = read_sort_file(file1, time_elem)
-    groups1 = into_groups(entries1,5000,time_elem)
+    groups1 = into_groups(entries1,10000,time_elem)
     # second file
     entries2 = read_sort_file(file2, time_elem)
-    groups2 = into_groups(entries2,5000,time_elem)
+    groups2 = into_groups(entries2,10000,time_elem)
     #print("Self-matching------------------------")
     #match_results = match_groups(groups1,groups1)
     #print(match_results)
     print("BSSID-matching--------------------")
     match_results = match_groups(groups1,groups2, "BSSID")
     print(match_results)
+    print("Euclid-matching--------------------")
     match_results = match_groups(groups1,groups2, "Euclid")
     print(match_results)
 
