@@ -1,9 +1,15 @@
 import math
 import sys
+from plotter import plot_test
+import matplotlib.pyplot as plt
+
 
 # purpose of this program is to compare the capture logs grouped by user-defined time intervals
-#   - this program naively begins at start of file(s) without regard to time/clock synchronization
-#   - can compare against it's own groups within the file, or across all possible groups in two files at a time
+# INPUTS: one or two file names for comparison
+#   - program imports file(s) and splits observations into groups
+#   - if given two files, begins at the start of the first file and matches any synchronized groups from the second file
+#   - otherwise if one file, compares against its own groups in an auto-correlation sort of way
+#   - plots the results!
 
 time_elem = 1  # represents location of time element in data set
 signal = 0  # represents signal type ("WIFI" or "GPS") in data set
@@ -25,6 +31,7 @@ class Group:
         self.lat = 0.0
         self.lon = 0.0
         self.err = 0.0 # radial error in lat/lon measurement
+        self.time = 0
         self.gkey = ""
         self.slice_size = slice_size
         self.group_number = group_number
@@ -32,10 +39,11 @@ class Group:
     def add_obs(self, observation):
         self.observations.append(observation)
 
-    def add_loc(self, lat, lon, err):
+    def add_loc(self, lat, lon, err, time):
         self.lat = lat
         self.lon = lon
         self.err = err
+        self.time = time
 
     # this should compute a group key based on the private_key and (hashed?) observations
     def compute_gkey(self, private_key):
@@ -80,7 +88,6 @@ def calcDistLatLong(coord1, coord2):
 
     a = math.sin(dlat / 2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2)**2
     dist = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    #print("getting distance, returning {}".format(dist))
     return dist
 
 # --------------------------------------------------
@@ -97,7 +104,7 @@ def normalize_group(group):
             tmp_norm = (int(item[-1]) - int(min_RSSI[-1])) / (int(max_RSSI[-1]) - int(min_RSSI[-1]))
             new_group.append((item[0], tmp_norm))
         except Exception as e:
-            print("Exception {}".format(e))
+            print("Exception in normalize_group {}".format(e), item)
             pass
 
     return new_group
@@ -110,8 +117,8 @@ def normalize_group(group):
 def match_distances(observations1, observations2):
     group_intersect = []
 
-    group1_BSSID_RSSI = [(item[3], item[-2]) for item in observations1]
-    group2_BSSID_RSSI = [(item[3], item[-2]) for item in observations2]
+    group1_BSSID_RSSI = [(item[3], item[4]) for item in observations1]
+    group2_BSSID_RSSI = [(item[3], item[4]) for item in observations2]
 
     group1_BSSID_RSSI_norm = normalize_group(group1_BSSID_RSSI)
     group2_BSSID_RSSI_norm = normalize_group(group2_BSSID_RSSI)
@@ -172,37 +179,43 @@ def match_groups(groups1, groups2, mode="BSSID"):
             GPS_dist = calcDistLatLong((group1.lat,group1.lon),(group2.lat,group2.lon))
 
             if dim:
-                matches.append((euclid_dist / math.sqrt(dim), man_dist / dim, GPS_dist, dim, possible_matches))
+                matches.append((euclid_dist / math.sqrt(dim), man_dist / dim, GPS_dist, dim, possible_matches,
+                                group1.err, group2.err, group2.time))
             else:
-                matches.append((2, 2, 2, dim, possible_matches))
+                matches.append((2, 2, GPS_dist, dim, possible_matches,
+                                group1.err, group2.err, group2.time)) # just placeholders in case something wrong
 
             num_group_elems += len(observations1)  # all that *could* have matched
         match_results[group_count] = matches, sum([match[1] for match in matches]) / num_group_elems
     return match_results
-    """
-    if mode == "BSSID":
-        for group1 in groups1:
-            group_count += 1
-            matches = []
-            num_group_elems = 0
-            for group2 in groups2:
-                current_matches = count_BSSID_matches(group1,group2)
-                matches.append(current_matches)
-                num_group_elems += len(group1) # all that *could* have matched
-            match_results[group_count] = matches, sum(matches)/num_group_elems
-        return match_results
-    elif mode == "Euclid":
-        for group1 in groups1:
-            group_count += 1
-            matches = []
-            num_group_elems = 0
-            for group2 in groups2:
-                euclid_dist = count_normalized_euclidean_match(group1,group2)
-                matches.append(euclid_dist)
-                #num_group_elems += len(group1) # all that *could* have matched
-            match_results[group_count] = matches #, sum(matches)/num_group_elems
-        return match_results
-    """
+
+# --------------------------------------------------
+# attempts a synchronous match between two different groups
+#   - for each group in groups1, find a group in groups2 approx matching the time of the first group, compare
+#   - offset allows some +/- with differences in timing between groups
+def match_groups_synchronous(groups1, groups2, offset):
+    matches = []
+    for group1 in groups1:
+        observations1 = group1.observations
+        num_group_elems = 0
+        for group2 in groups2:
+            if group1.time < group2.time + offset and group1.time > group2.time - offset:
+                observations2 = group2.observations
+                # current_matches,possible_matches = count_BSSID_matches(group1, group2)
+                possible_matches = len(observations1)
+                euclid_dist, man_dist, dim = match_distances(observations1, observations2)
+                GPS_dist = calcDistLatLong((group1.lat,group1.lon),(group2.lat,group2.lon))
+
+                if dim:
+                    matches.append((euclid_dist / math.sqrt(dim), man_dist / dim, GPS_dist, dim, possible_matches,
+                                    group1.err, group2.err, group2.time))
+                else:
+                    matches.append((2, 2, GPS_dist, dim, possible_matches,
+                                    group1.err, group2.err, group2.time)) # just placeholders in case something wrong
+
+                num_group_elems += len(observations1)  # all that *could* have matched
+
+    return matches, 0#sum([match[1] for match in matches]) / num_group_elems
 
 
 # --------------------------------------------------
@@ -240,11 +253,11 @@ def into_groups(entries, step=5000, elem=1):
                     current_timestamp < time_slice and \
                     current_timestamp > prev_slice:
                 if float(entry[5]) < err:
-                    group.add_loc(lat=float(entry[3]), lon=float(entry[4]), err=float(entry[5]))
+                    group.add_loc(lat=float(entry[3]), lon=float(entry[4]), err=float(entry[5]), time=int(entry[2]))
                     err = float(entry[5]) # replace with better coordinate with lower error
         prev_slice = time_slice
 
-        if group.observations: # only want to add it as a group if something is there..
+        if group.observations and group.time: # only want to add it if time and observations are present
             groups.append(group)
             num_groups += 1
 
@@ -259,7 +272,11 @@ def read_sort_file(file, elem=1):
     with open(file, "r", errors="ignore") as f_my:
         try:
             for line in f_my:
-                entries.append(tuple(line.strip("\n").split(',')[:6]))
+                split_line = line.strip("\n").strip(",").split(',')
+                num_fields = len(split_line)
+                # have to add this because SSID's with a "," screwed it up, adding an additional field in the split
+                if num_fields == 5 and split_line[0] == "WIFI" or num_fields == 6 and split_line[0] == "GPS":
+                    entries.append(tuple(line.strip("\n").split(',')[:6]))
             entries.sort(key=lambda k: int(k[elem]))
         except Exception as e:
             print("error {} in line \'{}\', ignoring ".format(e, str(line)))
@@ -289,21 +306,52 @@ def main():
     entries1 = read_sort_file(file1, time_elem)
     groups1 = into_groups(entries1, 5000, time_elem)
     # second file
-    entries2 = read_sort_file(file2, time_elem)
-    groups2 = into_groups(entries2, 5000, time_elem)
-    # print("Self-matching------------------------")
-    # match_results = match_groups(groups1,groups1)
-    # print(match_results)
+    if file2: # then match the two files
+        entries2 = read_sort_file(file2, time_elem)
+        groups2 = into_groups(entries2, 5000, time_elem)
+
+        match_results, _ = match_groups_synchronous(groups1, groups2, 3000)
+        output_results = []
+        for item in match_results:
+            try:
+                output_results.append([item[0], item[1], item[2], item[3] / item[4], item[5], item[6], item[7]])
+            except Exception as e:
+                print("error {} in output_results with item {}".format(e, item))
+        plot_test(output_results, "Close Proximity")
+        plt.show()
+
+    else: # we do the auto-correlation operation
+
+        print("Euclid-matching--------------------")
+        #      (euclid_dist / math.sqrt(dim), man_dist / dim, GPS_dist, dim, possible_matches, group1.err, group2.err, time)
+        match_results = match_groups(groups1, groups1)
+        output_results = []
+
+        # for self-matching/auto-correlation
+        for row in range(1,len(match_results)):
+            for item in match_results[row][0]:
+                try:
+                    output_results.append([item[0], item[1], item[2], item[3] / item[4], item[5], item[6], item[7]])
+                    #print(output_results[-1])
+                except Exception as e:
+                    print("error {} in output_results with item {}".format(e,item))
+            plot_test(output_results, "Indoor Residence")
+            output_results = []
+        plt.show()
+
     """
-    print("BSSID-matching--------------------")
-    match_results = match_groups(groups1,groups2, "BSSID")
-    percentages = [item[-1][-1] for item in match_results.items()]
-    print(percentages,sum(percentages)/len(percentages))
+    match_results, _ = match_groups_synchronous(groups1, groups2, 3000)
+    output_results = []
+    for item in match_results:
+        try:
+            output_results.append([item[0], item[1], item[2], item[3] / item[4], item[5], item[6], item[7]])
+        except Exception as e:
+            print("error {} in output_results with item {}".format(e, item))
+    plot_test(output_results, "Close Proximity")
+    plt.show()
     """
-    print("Euclid-matching--------------------")
-    match_results = match_groups(groups1, groups2)
-    for item in match_results[16][0]:
-        print(item[0], item[1], item[2], item[3] / item[4])
+    #for row in output_results:
+    #    print(row)
     # print("*************************************************")
     # print(match_results[2])
 
