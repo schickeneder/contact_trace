@@ -1,5 +1,7 @@
 import math
 import sys
+import itertools
+import hashlib
 from plotter import plot_test
 import matplotlib.pyplot as plt
 
@@ -11,7 +13,7 @@ import matplotlib.pyplot as plt
 #   - otherwise if one file, compares against its own groups in an auto-correlation sort of way
 #   - plots the results!
 
-time_elem = 1  # represents location of time element in data set
+time_elem = 1  # represents location of time element in data set (order in .csv format)
 signal = 0  # represents signal type ("WIFI" or "GPS") in data set
 R = 6373000.0 # approximate radius of earth in meters
 	#Equatorial radius (km)	        6378.137
@@ -52,8 +54,40 @@ class Group:
     def compute_weak_hashed(self):
         pass
 
-    def compute_multi_hashed(self):
-        pass
+    #doesn't seem to work that well
+    def compute_pair_hashes(self):
+        self.hashed_observations = []
+        self.observations.sort(key=lambda x: int(x[4]), reverse=True)
+        prev = 0
+        for obs in self.observations:
+            #print(obs)
+            if prev:
+                obs_as_string = str(prev[2]) + str(prev[3]) + str(obs[2]) + str(obs[3])
+                #print(obs_as_string)
+                hashed = hashlib.md5(obs_as_string.encode()).hexdigest()
+                self.hashed_observations.append(hashed)
+            prev = obs
+
+        #print(len(self.observations), len(self.hashed_observations))
+
+
+    #TODO: only works for n choose 2 currently, need to generalize..
+    # this doesn't work because it deviates from the original match factor too much
+    def compute_multi_hashed(self,n=7,k=2): # as in "n choose k"
+        self.observations.sort(key=lambda x: int(x[time_elem]))
+        n = min(len(self.observations), n)
+        for comb in itertools.combinations(self.observations[n-1::-1], k):
+            sorted_comb = (sorted(comb, reverse=True, key=lambda x: int(x[4]))) # descending order
+            first = list(sorted_comb[0])
+            second = list(sorted_comb[1])
+            del first[-1]
+            del second[-1]
+            obs_as_string = str(''.join(map(str, first)) + str(''.join(map(str, second)))
+                                + str(self.time//self.slice_size))
+            #print(obs_as_string) # now it's a long string
+            hashed = hashlib.md5(obs_as_string.encode()).hexdigest()
+            self.hashed_observations.append(hashed)
+
 
     def return_timespan(self):
         # returns the max-min of observation timestamps
@@ -89,6 +123,9 @@ def calcDistLatLong(coord1, coord2):
     a = math.sin(dlat / 2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2)**2
     dist = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return dist
+
+def normalize_RSSI(RSSI, max, min, steps):
+    pass
 
 # --------------------------------------------------
 # returns a normalized, quantized group consisting of a list of identifiers and values ranging from 0-10
@@ -161,31 +198,51 @@ def count_BSSID_matches(group1, group2):
     return len(group_intersect)
 
 
+def match_hashes(hobservations1, hobservations2):
+    intersect_count = 0
+    for item1 in hobservations1:
+        for item2 in hobservations2:
+            if item1 == item2:
+                #print("{} equals {}".format(item1,item2))
+                intersect_count += 1
+                break
+    return intersect_count,len(hobservations1)
+
+
+
 # --------------------------------------------------
 # TODO: add the coordinates stuff here..
-def match_groups(groups1, groups2, mode="BSSID"):
+def match_groups(groups1, groups2):
     group_count = 0
     match_results = {}
     for group1 in groups1:
         observations1 = group1.observations
+        group1.compute_pair_hashes()
+        hobservations1 = group1.hashed_observations
+
         group_count += 1
         matches = []
         num_group_elems = 0
         for group2 in groups2:
             observations2 = group2.observations
+            group2.compute_pair_hashes()
+            hobservations2 = group2.hashed_observations
             # current_matches,possible_matches = count_BSSID_matches(group1, group2)
             possible_matches = len(observations1)
+            hashed_matches, possible_hash_matches = match_hashes(hobservations1, hobservations2)
             euclid_dist, man_dist, dim = match_distances(observations1, observations2)
             GPS_dist = calcDistLatLong((group1.lat,group1.lon),(group2.lat,group2.lon))
 
             if dim:
                 matches.append((euclid_dist / math.sqrt(dim), man_dist / dim, GPS_dist, dim, possible_matches,
-                                group1.err, group2.err, group2.time))
+                                group1.err, group2.err, group2.time, hashed_matches / possible_hash_matches))
             else:
                 matches.append((2, 2, GPS_dist, dim, possible_matches,
-                                group1.err, group2.err, group2.time)) # just placeholders in case something wrong
+                                group1.err, group2.err, group2.time, hashed_matches / possible_hash_matches)) # just placeholders in case something wrong
 
             num_group_elems += len(observations1)  # all that *could* have matched
+            #print("dim/possible: {}/{}, {} hash matches: {}/{}, {}"
+            #      .format(dim, possible_matches, dim/possible_matches, hashed_matches, possible_hash_matches, hashed_matches/possible_hash_matches))
         match_results[group_count] = matches, sum([match[1] for match in matches]) / num_group_elems
     return match_results
 
@@ -204,7 +261,7 @@ def match_groups_synchronous(groups1, groups2, offset):
                 # current_matches,possible_matches = count_BSSID_matches(group1, group2)
                 possible_matches = len(observations1)
                 euclid_dist, man_dist, dim = match_distances(observations1, observations2)
-                GPS_dist = calcDistLatLong((group1.lat,group1.lon),(group2.lat,group2.lon))
+                GPS_dist = calcDistLatLong((group1.lat, group1.lon), (group2.lat, group2.lon))
 
                 if dim:
                     matches.append((euclid_dist / math.sqrt(dim), man_dist / dim, GPS_dist, dim, possible_matches,
@@ -305,6 +362,9 @@ def main():
     # first file
     entries1 = read_sort_file(file1, time_elem)
     groups1 = into_groups(entries1, 5000, time_elem)
+
+    groups1[0].compute_pair_hashes()
+
     # second file
     if file2: # then match the two files
         entries2 = read_sort_file(file2, time_elem)
@@ -331,7 +391,7 @@ def main():
         for row in range(1,len(match_results)):
             for item in match_results[row][0]:
                 try:
-                    output_results.append([item[0], item[1], item[2], item[3] / item[4], item[5], item[6], item[7]])
+                    output_results.append([item[0], item[1], item[2], item[3] / item[4], item[5], item[6], item[7], item[8]])
                     #print(output_results[-1])
                 except Exception as e:
                     print("error {} in output_results with item {}".format(e,item))
