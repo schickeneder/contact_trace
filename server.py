@@ -1,13 +1,13 @@
 
 import random
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, json
 app = Flask(__name__)
 
 hashes = {}
 num_bits = 32
 population_size = 1000000
 reported_carriers = 0.1*population_size
-num_hashes = int(300000000)
+num_hashes = int(100000)
 
 #30, 100M ~ 17.6 (15) GB total
 #30, 120M ~ 18.8 (16)
@@ -45,8 +45,8 @@ def sim_return_matches():
 def return_matches():
 	#response = "Number of hashes is {}".format(len(hashes))
 	#this is just a temporary test
-	keylist = request.form.getlist('keylist')
-	#print(keylist)
+	keylist = json.loads(request.data)
+	#print("Request received: {}".format(keylist))
 	response = []
 
 	for key in keylist:

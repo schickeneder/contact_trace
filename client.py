@@ -1,10 +1,10 @@
 import random
 import requests
-import time
+from timeit import default_timer as timer
 import json
 
 num_bits = 32
-num_keys = 500 # ~144*7*10 or 144 groups (every 10 min), 10 per group, 7 days
+num_keys = 10000 # ~144*7*10 or 144 groups (every 10 min), 10 per group, 7 days
 url = "http://localhost:5000/check_contact"
 
 #32 bits, 5000 keys, 300M in server ~ 0.034s
@@ -15,14 +15,16 @@ tests = []
 for i in range(1,num_keys):
 	tests.append(random.getrandbits(num_bits))
 
-keys = {'keylist':tests}
 
-start = time.time()
-x = requests.post(url, data = keys)
-stop = time.time()
+with open("client_keys_"+str(num_keys),"w") as f:
+	f.write(str(tests))
 
+start = timer()
+x = requests.post(url, data = str(tests))
+stop = timer()
 count = 0
 items = json.loads(x.text)
+#print(items)
 for item in items:
 	if int(item):
 		count = count + 1
