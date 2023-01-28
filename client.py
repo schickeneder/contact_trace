@@ -4,6 +4,8 @@ from timeit import default_timer as timer
 import json
 import sys
 
+# This was the client used to load test servers with queries for the contact tracing hash collision filter scheme
+
 num_bits = 48
 num_keys = 1000 # ~144*7*10 or 144 groups (every 10 min), 10 per group, 7 days
 address = "localhost:5000"

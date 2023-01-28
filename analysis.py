@@ -4,7 +4,14 @@ from statistics import variance, mean
 import matplotlib.pyplot as plt
 from numpy.random import randint
 
+# this is used to analyze wifi scan logs collected from https://github.com/schickeneder/WiFi_Scanner_micropython
+# this is not used for wiglnet wifi dumps collected from phones
 
+
+# parses any amount of raw_data that has been imported from files
+# raw_data looks like: {"time": 1674503222, "data": {"1aebb620b2de": ["MAGA", -63, 4]}}||{"time": 1674503222,..
+# where each observation denoted by a unix timestamp time is separated by '||' to easily delimit
+# returns a data_list consisting of a list of dictionaries in the same format
 def parse_data(raw_data):
 	raw_list = raw_data.split("||")
 	data_list = []
@@ -13,9 +20,6 @@ def parse_data(raw_data):
 		#print("\n\n")
 		try: # in case some weren't formatted correctly, skip a bad json.loads
 			data_list.append(json.loads(item))
-			#print(foo)
-			#3for key in foo["data"]:
-			#	print(foo["data"][key])
 		except:
 			pass
 	return data_list
@@ -25,6 +29,7 @@ def import_data(filename):
 		input = f.read()
 	return input
 
+# incomplete and not currently used
 def import_all_data(filepath):
 	try:
 		for file in os.listdir(filepath):
@@ -33,7 +38,8 @@ def import_all_data(filepath):
 	except:
 		print("No files in {}".format(filepath))
 
-# imports all files with deviceID in the name
+# imports contents of all files with deviceID in the name,
+# concatenates data into "raw_data" format for use with parse_data()
 def import_all_data_one_device(filepath,deviceID):
 	found = False
 	input = ""
@@ -51,7 +57,8 @@ def import_all_data_one_device(filepath,deviceID):
 	else:
 		return input
 
-# create list of dictionaries where root is deviceID; each deviceID key contains all SSIDs; each SSID contains all RSSI
+# create list of dictionaries where root is deviceID; each deviceID key contains all SSIDs;
+# each SSID contains all RSSI
 def BSSID_data_dict(data_list): # formatted like [{'time': 1673582493, 'data': {'14ebb620b2de': ['Redondo Rondo', -24, 4]
 	BSSID_dict = {}
 	for entry in data_list:
@@ -222,6 +229,7 @@ def plot_all_APs(RSSI_dict, SSID):
 	plt.show()
 	print(BSSID_list)
 
+# returns corrected variance over selected intervals with the average of each interval shifted to 0
 # inputs timestamps and RSSI and sampling interval
 # can be input of just one BSSID, to include multiple at once, would need to offset timestamps
 # if otherwise overlapping, to keep them separate
