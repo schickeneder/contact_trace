@@ -182,9 +182,8 @@ def plot_device_all_APs(deviceID):
 	plt.show()
 	print(SSID_list)
 
-# plots all RSSI measurements for each deviceID in one figure for the given BSSID
-# skip if time = 0, means it hasn't synced clock
-def plot_all_APs(BSSID):
+
+def get_RSSI_dict(BSSID):
 	device_list = get_devIDs("data")
 	RSSI_dict = {} # looks like {"deviceid1" : {"time" : [123003, 123004..], "RSSI" : [-24,-67,..]} , "devid2"..
 
@@ -209,6 +208,11 @@ def plot_all_APs(BSSID):
 	else:
 		SSID = "unknown"
 
+	return RSSI_dict, SSID
+
+# plots all RSSI measurements for each deviceID in one figure for the given BSSID
+# skip if time = 0, means it hasn't synced clock
+def plot_all_APs(RSSI_dict, SSID):
 	for deviceID in RSSI_dict:
 		#fig = plt.figure()
 		#print(RSSI_dict[deviceID])
@@ -222,8 +226,37 @@ def plot_all_APs(BSSID):
 # can be input of just one BSSID, to include multiple at once, would need to offset timestamps
 # if otherwise overlapping, to keep them separate
 # normalizes average over each interval by shifting to 0, to achieve consistent variance across samples
-# interval should be relevant sampling intervals for contact tracing such as 1 min, 10 min, 30 min
-def get_variance(timestamps,RSSI,interval):
+# interval should be in seconds; relevant intervals for contact tracing are 1 min, 10 min, 30 min
+# interval 0 returns variance of whole set.
+def get_variance(timestamps,RSSI,interval=0):
+	corrected_RSSI = []
+	min_timestamp = min(timestamps)
+	if interval == 0 and len(RSSI) > 1:
+		return variance(RSSI)
+	last_timestamp = 0
+	next_interval = timestamps[0] + interval
+	tmp_RSSI = []
+	for timestamp,RSS in zip(timestamps,RSSI):
+		if timestamp < last_timestamp:
+			print("Timestamps out of order!!")
+			return -2
+		else:
+			last_timestamp = timestamp
+
+		if timestamp > next_interval: # package up this interval
+			if tmp_RSSI:
+				tmp_mean = mean(tmp_RSSI)
+				corrected_RSSI += [x - tmp_mean for x in tmp_RSSI]
+			tmp_RSSI = []
+			next_interval += interval
+		else: # keep adding for the current interval
+			tmp_RSSI.append(RSS)
+
+	#print(corrected_RSSI)
+	if len(corrected_RSSI) > 1:
+		return variance(corrected_RSSI)
+	else:
+		return -1
 
 # def write_timestamped_RSSI(device_list):
 # 	for devID in device_list:
@@ -272,7 +305,19 @@ if __name__== "__main__":
 	# 	plot_device_all_APs(devID)
 
 	for BSSID in BSSID_list:
-		plot_all_APs(BSSID)
+		RSSI_dict, SSID = get_RSSI_dict(BSSID)
+		print("BSSID|SSID : {}|{}".format(BSSID,SSID))
+		for devID in RSSI_dict:
+			cvar = get_variance(RSSI_dict[devID]["time"],RSSI_dict[devID]["RSSI"],60)
+			if len(RSSI_dict[devID]["RSSI"]) > 1:
+				var = variance(RSSI_dict[devID]["RSSI"])
+				meanRSS = mean(RSSI_dict[devID]["RSSI"])
+			else:
+				var = -1
+			if var > 1: # sometimes will be var but no cvar due to the intervals
+				print("Mean/Var/C-Var for {} is {:.2f}/{:.2f}/{:.2f}".format(
+					devID,meanRSS,var,cvar))
+		#plot_all_APs(RSSI_dict, SSID)
 
 	#print_var(device_list)
 		#print(BSSID_dict)
