@@ -15,9 +15,11 @@ class rxnode:
     master_AP_list = {"BSSID_list": [], "SSID_list": [], "channel_list": []} # store BSSID, SSID, channel for all devID
     def __init__(self,devID):
         self.devID = devID # unique device ID which is usually a MAC address like "1a2dc9d20a"
-        self.data = {} # contains all observations like:
+        self.data = {} # contains all measurements organized like:
         # "<BSSID1>" : {"SSID" : "<SSID1>", "channel": 2, "RSSI_list": [-20,-34], "timestamps": [12461,12463]}
         # may need to adjust this because channel could change..
+        self.data2 = {} # contains measurements in simple format organized by timestamp like:
+        # "<timestamp1>" : {"<BSSID1>": <RSSI1}, "1667334" : { "1aeb2ac3" : -56, "2cd42445 : -60},
         self.min_time = 9999999999 # once data is assigned, stores the earliest timestamp
         self.max_time = 0 # " " latest timestamp
         self.AP_list = {"BSSID_list": [], "SSID_list": [], "channel_list": []} # instance AP list, common index
@@ -43,6 +45,9 @@ class rxnode:
     def get_min_max_times(self):
         return self.min_time, self.max_time
 
+    def get_deviceID(self):
+        return self.devID
+
     # imports data for this devID from filepath
     # protocol version describes which file format to use for import, default is "0" which is what we used for nodeMCUs
     def import_data(self,filepath="data", protocol_version="0"):
@@ -67,6 +72,8 @@ class rxnode:
                 if entry["time"] > 1600000000: # we don't want it to include data with invalid timestamps
                     self.data[BSSID]["RSSI_list"].append(entry["data"][BSSID][1])
                     self.data[BSSID]["timestamps"].append(entry["time"])
+                    self.data2[entry["time"]] = {} # don't need to check because each time entry should be unique
+                    self.data2[entry["time"]][BSSID] = entry["data"][BSSID][0] # enter timestamp, BSSID and RSSI
 
         self.AP_list["BSSID_list"], self.AP_list["SSID_list"], self.AP_list["channel_list"] = get_APs(data_list)
         self.update_master_AP_list()
@@ -338,7 +345,7 @@ def plot_all_APs(RSSI_dict, SSID):
     plt.pause(0.001)
     print(BSSID_list)
 
-# rxnode-object based version of plot all APs, plots one RSSI measurements for one BSSID from all devices
+# rxnode-object based version of plot all APs, plots all RSSI measurements for one BSSID from all devices
 def plot_AP_across_devices(node_list,BSSID):
     for node in node_list:
         AP_data = node.get_data_for_BSSID(BSSID)
@@ -409,8 +416,8 @@ def print_all_var(BSSID_list):
 # a match occurs if RSSIs for the same AP/BSSID are within <threshold>
 # if more than one RSSI are recorded for the same BSSID in an interval, the higher RSSI is used
 # the color of each devID is consistent across intervals
-def match_all_APs(RSSI_dict, threshold, interval=60):
-    for devID in RSSI_dict:
+def match_all_APs(node_list, threshold, interval=60):
+    for node in node_list:
         intervals = [] # stores the timestamp of each interval, i.e. a decimation of dev_timestamps
         matches = [] # stores the number of matches in each interval
         dev_timestamps = RSSI_dict[devID]["time"]
