@@ -10,6 +10,58 @@ from numpy.random import randint
 # TODO: this would be a cleaner implementation as a class..
 
 
+class rxnode:
+
+    master_AP_list = {"BSSID_list": [], "SSID_list": [], "channel_list": []} # store BSSID, SSID, channel for all devID
+    def __init__(self,devID):
+        self.devID = devID # unique device ID which is usually a MAC address like "1a2dc9d20a"
+        self.data = {} # contains all observations like:
+        # "<BSSID1>" : {"SSID" : "<SSID1>", "channel": 2, "RSSI_list": [-20,-34], "timestamps": [12461,12463]}
+        # may need to adjust this because channel could change..
+        self.min_time = 0 # once data is assigned, stores the earliest timestamp
+        self.max_time = 0 # " " latest timestamp
+        self.AP_list = {"BSSID_list": [], "SSID_list": [], "channel_list": []} # instance AP list, common index
+
+    # should call after importing data
+    def update_master_AP_list(self):
+        try:
+            for BSSID,SSID,channel in zip(self.AP_list["BSSID_list"],
+                                          self.AP_list["SSID_list"],self.AP_list["channel_list"]):
+                if BSSID not in self.master_AP_list["BSSID_list"]:
+                    rxnode.master_AP_list["BSSID_list"].append(BSSID)
+                    rxnode.master_AP_list["SSID_list"].append(SSID)
+                    rxnode.master_AP_list["channel_list"].append(channel)
+        except:
+            "ERROR: Couldn't append AP list info for devID {} to master_AP_list".format(self.devID)
+
+    def get_AP_list(self):
+        return self.AP_list
+
+    def get_master_AP_list(self):
+        return self.master_AP_list
+
+    # imports data for this devID from filepath
+    # protocol version describes which file format to use for import, default is "0" which is what we used for nodeMCUs
+    def import_data(self,filepath="data", protocol_version="0"):
+
+        # import data to data_list
+        if not protocol_version == "0":
+            print("ERROR:Protocol version {} not supported".format(protocol_version))
+            return
+        raw_data = import_all_data_one_device(filepath, self.devID)
+        data_list = parse_data(raw_data) # looks like [{"time": 1674503222, "data": {"1aebb620b2de": ["MAGA", -63, 4]}},
+
+        # load data into rxnode instance
+        for entry in data_list:
+            for BSSID in entry["data"]:
+                if BSSID not in self.data: # create new entry
+                    self.data[BSSID] = {"SSID": entry["data"][BSSID][0],"channel": entry["data"][BSSID][2],
+                                         "RSSI_list": [],"timestamps": []}
+                self.data[BSSID]["RSSI_list"].append(entry["data"][BSSID][1])
+                self.data[BSSID]["timestamps"].append(entry["time"])
+
+        self.AP_list["BSSID_list"], self.AP_list["SSID_list"], self.AP_list["channel_list"] = get_APs(data_list)
+        self.update_master_AP_list()
 
 # parses any amount of raw_data that has been imported from files
 # raw_data looks like: {"time": 1674503222, "data": {"1aebb620b2de": ["MAGA", -63, 4]}}||{"time": 1674503222,..
@@ -402,8 +454,17 @@ if __name__ == "__main__":
     #               '026ae38ab027', '54833aa79b17', '0c75bdd3bf81', '0c75bdd3bf84', '0c75bdd3bf83', '1e59c03c3825',
     #               '1a59c03c3825', '0054afa883b7', '0254affe0341', '0026b49e2b28', '0254aff4228c', '8c85805c3820',
     #               '00226cf0274c', 'ce6079796681', '12e8a782981c', '32b4b82791b5', '0054afc8746f', '7cfc3cb62af4']
+    # device_list = ['3c6105d37067', 'e8db84c4c80a', 'e8db84c62200', '3c6105d41631', 'e8db84c620b1', '3c6105d37f73',
+    #                'e8db84c4c0b0', '3c6105d49ef8', '3c6105d3a726']
+
 
     device_list = get_devIDs("data")
+    print(device_list)
+
+    node1 = rxnode('3c6105d37067')
+    node1.import_data()
+    print("node AP list is {}".format(node1.get_AP_list()))
+    print("master AP list is {}".format(node1.get_master_AP_list()))
 
     BSSID_list, SSID_list, channel_list = get_APs(parse_data(import_all_data_all_devices("data", device_list)))
     print("BSSID list: {}".format(BSSID_list))
