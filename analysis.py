@@ -18,7 +18,7 @@ class rxnode:
         self.data = {} # contains all observations like:
         # "<BSSID1>" : {"SSID" : "<SSID1>", "channel": 2, "RSSI_list": [-20,-34], "timestamps": [12461,12463]}
         # may need to adjust this because channel could change..
-        self.min_time = 0 # once data is assigned, stores the earliest timestamp
+        self.min_time = 9999999999 # once data is assigned, stores the earliest timestamp
         self.max_time = 0 # " " latest timestamp
         self.AP_list = {"BSSID_list": [], "SSID_list": [], "channel_list": []} # instance AP list, common index
 
@@ -40,6 +40,9 @@ class rxnode:
     def get_master_AP_list(self):
         return self.master_AP_list
 
+    def get_min_max_times(self):
+        return self.min_time, self.max_time
+
     # imports data for this devID from filepath
     # protocol version describes which file format to use for import, default is "0" which is what we used for nodeMCUs
     def import_data(self,filepath="data", protocol_version="0"):
@@ -53,15 +56,37 @@ class rxnode:
 
         # load data into rxnode instance
         for entry in data_list:
+            if entry["time"] < self.min_time:
+                self.min_time = entry["time"]
+            if entry["time"] > self.max_time:
+                self.max_time = entry["time"]
             for BSSID in entry["data"]:
                 if BSSID not in self.data: # create new entry
                     self.data[BSSID] = {"SSID": entry["data"][BSSID][0],"channel": entry["data"][BSSID][2],
                                          "RSSI_list": [],"timestamps": []}
-                self.data[BSSID]["RSSI_list"].append(entry["data"][BSSID][1])
-                self.data[BSSID]["timestamps"].append(entry["time"])
+                if entry["time"] > 1600000000: # we don't want it to include data with invalid timestamps
+                    self.data[BSSID]["RSSI_list"].append(entry["data"][BSSID][1])
+                    self.data[BSSID]["timestamps"].append(entry["time"])
 
         self.AP_list["BSSID_list"], self.AP_list["SSID_list"], self.AP_list["channel_list"] = get_APs(data_list)
         self.update_master_AP_list()
+
+    def plot_device_all_APs(self):
+
+        fig, ax = plt.subplots()
+
+        # c = randint(1,10,size=len(RSSI_dict))
+
+        scatters = []
+        for BSSID in self.data:
+            # fig = plt.figure()
+            scatter = ax.scatter(self.data[BSSID]["timestamps"], self.data[BSSID]["RSSI_list"],
+                                 label=BSSID + " " + self.data[BSSID]["SSID"],marker=".")
+            scatters.append(scatter)
+
+        plt.title("Device: {}".format(self.devID))
+        ax.legend(handles=scatters, loc="lower left", title="BSSIDs")
+        plt.show()
 
 # parses any amount of raw_data that has been imported from files
 # raw_data looks like: {"time": 1674503222, "data": {"1aebb620b2de": ["MAGA", -63, 4]}}||{"time": 1674503222,..
@@ -459,18 +484,21 @@ if __name__ == "__main__":
 
 
     device_list = get_devIDs("data")
-    print(device_list)
+    print("device list: {}".format(device_list))
 
     node1 = rxnode('3c6105d37067')
     node1.import_data()
     print("node AP list is {}".format(node1.get_AP_list()))
     print("master AP list is {}".format(node1.get_master_AP_list()))
+    mint,maxt = node1.get_min_max_times()
+    print("min/max times are {},{}".format(mint,maxt))
 
     BSSID_list, SSID_list, channel_list = get_APs(parse_data(import_all_data_all_devices("data", device_list)))
     print("BSSID list: {}".format(BSSID_list))
     print("SSID list: {}".format(SSID_list))
     print("channel list: {}".format(channel_list))
 
+    node1.plot_device_all_APs()
     # write_CSV_RSSI(device_list)
 
     # for devID in device_list:
