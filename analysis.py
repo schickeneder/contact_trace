@@ -4,10 +4,10 @@ from statistics import variance, mean
 import matplotlib.pyplot as plt
 from numpy.random import randint
 
+# Python version: '3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]'
 
 # this is used to analyze wifi scan logs collected from https://github.com/schickeneder/WiFi_Scanner_micropython
-# this is not used for wiglnet wifi dumps collected from phones
-# TODO: this would be a cleaner implementation as a class..
+# this is not used for wiglnet wifi dumps collected from phones (yet)
 
 
 class rxnode:
@@ -87,6 +87,12 @@ class rxnode:
         plt.title("Device: {}".format(self.devID))
         ax.legend(handles=scatters, loc="lower left", title="BSSIDs")
         plt.show()
+
+    def get_data_for_BSSID(self,BSSID):
+        if BSSID in self.data:
+            return self.data[BSSID]
+        else:
+            return False
 
 # parses any amount of raw_data that has been imported from files
 # raw_data looks like: {"time": 1674503222, "data": {"1aebb620b2de": ["MAGA", -63, 4]}}||{"time": 1674503222,..
@@ -332,6 +338,17 @@ def plot_all_APs(RSSI_dict, SSID):
     plt.pause(0.001)
     print(BSSID_list)
 
+# rxnode-object based version of plot all APs, plots one RSSI measurements for one BSSID from all devices
+def plot_AP_across_devices(node_list,BSSID):
+    for node in node_list:
+        AP_data = node.get_data_for_BSSID(BSSID)
+        if AP_data: # if the node contained data for that AP
+            plt.scatter(AP_data["timestamps"],AP_data["RSSI_list"], marker=".")
+            SSID = AP_data["SSID"]
+
+    plt.title("BSSID: {} - {}".format(BSSID, SSID))
+    plt.show()
+    plt.pause(0.001)
 
 # returns corrected variance over selected intervals with the average of each interval shifted to 0
 # inputs timestamps and RSSI and sampling interval
@@ -486,19 +503,32 @@ if __name__ == "__main__":
     device_list = get_devIDs("data")
     print("device list: {}".format(device_list))
 
-    node1 = rxnode('3c6105d37067')
-    node1.import_data()
-    print("node AP list is {}".format(node1.get_AP_list()))
-    print("master AP list is {}".format(node1.get_master_AP_list()))
-    mint,maxt = node1.get_min_max_times()
-    print("min/max times are {},{}".format(mint,maxt))
+    nodes = []
+    for devID in device_list:
+        node = rxnode(devID)
+        node.import_data()
+        nodes.append(node)
 
-    BSSID_list, SSID_list, channel_list = get_APs(parse_data(import_all_data_all_devices("data", device_list)))
-    print("BSSID list: {}".format(BSSID_list))
-    print("SSID list: {}".format(SSID_list))
-    print("channel list: {}".format(channel_list))
+    BSSID_list = node.get_master_AP_list()["BSSID_list"]
 
-    node1.plot_device_all_APs()
+    #---plot measurements per AP
+    for BSSID in BSSID_list:
+        plot_AP_across_devices(nodes,BSSID)
+
+    #----plot measurements per device (node)
+    # for node in nodes:
+    #     node.plot_device_all_APs()
+
+    # print("node AP list is {}".format(node1.get_AP_list()))
+    # print("master AP list is {}".format(node1.get_master_AP_list()))
+    # mint,maxt = node1.get_min_max_times()
+    # print("min/max times are {},{}".format(mint,maxt))
+    #
+    # BSSID_list, SSID_list, channel_list = get_APs(parse_data(import_all_data_all_devices("data", device_list)))
+    # print("BSSID list: {}".format(BSSID_list))
+    # print("SSID list: {}".format(SSID_list))
+    # print("channel list: {}".format(channel_list))
+
     # write_CSV_RSSI(device_list)
 
     # for devID in device_list:
