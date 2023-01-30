@@ -73,7 +73,7 @@ class rxnode:
                     self.data[BSSID]["RSSI_list"].append(entry["data"][BSSID][1])
                     self.data[BSSID]["timestamps"].append(entry["time"])
                     self.data2[entry["time"]] = {} # don't need to check because each time entry should be unique
-                    self.data2[entry["time"]][BSSID] = entry["data"][BSSID][0] # enter timestamp, BSSID and RSSI
+                    self.data2[entry["time"]][BSSID] = entry["data"][BSSID][1] # enter timestamp, BSSID and RSSI
 
         self.AP_list["BSSID_list"], self.AP_list["SSID_list"], self.AP_list["channel_list"] = get_APs(data_list)
         self.update_master_AP_list()
@@ -100,6 +100,15 @@ class rxnode:
             return self.data[BSSID]
         else:
             return False
+
+    def get_data(self):
+        return self.data
+    def get_data2(self):
+        return self.data2
+
+    # returns list of BSSIDs for which measurement data exists
+    def get_BSSIDs(self):
+        return list(self.data.keys())
 
 # parses any amount of raw_data that has been imported from files
 # raw_data looks like: {"time": 1674503222, "data": {"1aebb620b2de": ["MAGA", -63, 4]}}||{"time": 1674503222,..
@@ -416,35 +425,75 @@ def print_all_var(BSSID_list):
 # a match occurs if RSSIs for the same AP/BSSID are within <threshold>
 # if more than one RSSI are recorded for the same BSSID in an interval, the higher RSSI is used
 # the color of each devID is consistent across intervals
-def match_all_APs(node_list, threshold, interval=60):
-    for node in node_list:
-        intervals = [] # stores the timestamp of each interval, i.e. a decimation of dev_timestamps
-        matches = [] # stores the number of matches in each interval
-        dev_timestamps = RSSI_dict[devID]["time"]
-        dev_RSSI = RSSI_dict[devID]["RSSI"]
-        current_interval = dev_timestamps[0] # start at the beginning
-        for devID2 in RSSI_dict: # compare against each other device
-            if devID == devID2:
-                continue # we don't need to compare against itself..
-            dev2_timestamps = RSSI_dict[devID2]["time"]
-            dev2_RSSI = RSSI_dict[devID2]["RSSI"]
-        # TODO maybe find a better way to do this with numpy? as vectors rather than loops?
-        last_timestamp = 0
-        next_interval = timestamps[0] + interval
-        tmp_RSSI = []
-        for timestamp, RSS in zip(timestamps, RSSI):
-            if timestamp < last_timestamp:
-                print("Timestamps out of order!!")
-                return -2
-            else:
-                last_timestamp = timestamp
+def match_all_APs(node1, node2, threshold, interval=60):
+    intervals = [] # stores the timestamp of each interval, i.e. a decimation of dev_timestamps
+    matches = [] # stores the number of matches in each interval
+    node1_timestamps = list(node1.get_data2().keys())
+    node2_timestamps = list(node2.get_data2().keys())
+    t1_index = 0
+    t2_index = 0
+    next_interval = node1_timestamps[t1_index] # by setting first to next, force it to sync t2_index on 1st iter.
+    common_BSSIDs = list(set(node1.get_BSSIDs()) & set(node2.get_BSSIDs())) # list of common BSSID
 
-            if timestamp > next_interval:  # package up this interval
-                if tmp_RSSI:
-                    tmp_mean = mean(tmp_RSSI)
-                    corrected_RSSI += [x - tmp_mean for x in tmp_RSSI]
-                tmp_RSSI = []
-                next_interval += interval
+    # TODO: test this part
+    while t1_index < len(node1_timestamps): # go through all node1 timestamps, outer loop is one interval
+        node1_APs = {} # {"BSSID1": rssi1, "BSSID2": rssi2}, clear for each interval
+        node2_APs = {}
+        while t1_index < len(node1_timestamps) and node1_timestamps[t1_index] < next_interval:
+            #print("node1_timestamps: {}".format(node1_timestamps[t1_index]))
+            # go through and get info, increment t1_index
+            tmp_data1 = node1.get_data2()[node1_timestamps[t1_index]] # store BSSID/RSSI pairs for that timestamp
+            #print("tmp_data1: {}".format(tmp_data1))
+
+            for BSSID in tmp_data1:
+                if BSSID not in node1_APs:
+                    node1_APs[BSSID] = tmp_data1[BSSID]
+                else: # if that BSSID is already there, compare stored RSSIs and keep the bigger one
+                    if node1_APs[BSSID] < tmp_data1[BSSID]:
+                        node1_APs[BSSID] = tmp_data1[BSSID]
+            if t1_index < len(node1_timestamps) - 0:
+                t1_index += 1
+
+        while t2_index < len(node2_timestamps) and node2_timestamps[t2_index] < next_interval:
+            #print("node2_timestamps: {}".format(node2_timestamps[t2_index]))
+            # go and get info, increment t2_index
+            tmp_data2 = node2.get_data2()[node2_timestamps[t2_index]] # store BSSID/RSSI pairs for that timestamp
+            #print("tmp_data2: {}".format(tmp_data2))
+
+            for BSSID in tmp_data2:
+                if BSSID not in node2_APs:
+                    node2_APs[BSSID] = tmp_data2[BSSID]
+                else:
+                    if node2_APs[BSSID] < tmp_data2[BSSID]:
+                        node2_APs[BSSID] = tmp_data2[BSSID]
+            if t2_index < len(node2_timestamps) - 0:
+                t2_index += 1
+
+        # TODO: compare matches
+        next_interval += interval
+
+    print("node1 APs: {} tmp_data1: {}".format(node1_APs,tmp_data1))
+    print("node2 APs: {} tmp_data2: {}".format(node2_APs,tmp_data2))
+
+    # not sure what all this stuff is about below this comment..?
+    # TODO need to set start timestamp to be min of the two, then check to see if min other is within "interval" of node1
+    # TODO maybe find a better way to do this with numpy? as vectors rather than loops?
+    # last_timestamp = 0
+    # next_interval = timestamps[0] + interval
+    # tmp_RSSI = []
+    # for timestamp, RSS in zip(timestamps, RSSI):
+    #     if timestamp < last_timestamp:
+    #         print("Timestamps out of order!!")
+    #         return -2
+    #     else:
+    #         last_timestamp = timestamp
+    #
+    #     if timestamp > next_interval:  # package up this interval
+    #         if tmp_RSSI:
+    #             tmp_mean = mean(tmp_RSSI)
+    #             corrected_RSSI += [x - tmp_mean for x in tmp_RSSI]
+    #         tmp_RSSI = []
+    #         next_interval += interval
 
 
 # def write_timestamped_RSSI(device_list):
@@ -516,7 +565,13 @@ if __name__ == "__main__":
         node.import_data()
         nodes.append(node)
 
+    print("node[0].get_data(): {}".format(nodes[0].get_data()))
+
+    print("node[0].get_data2(): {}".format(nodes[0].get_data2()))
+
     BSSID_list = node.get_master_AP_list()["BSSID_list"]
+
+    match_all_APs(nodes[0], nodes[1],0)
 
     #---plot measurements per AP
     for BSSID in BSSID_list:
