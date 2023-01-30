@@ -434,11 +434,11 @@ def match_all_APs(node1, node2, threshold, interval=60):
     t2_index = 0
     next_interval = node1_timestamps[t1_index] # by setting first to next, force it to sync t2_index on 1st iter.
     common_BSSIDs = list(set(node1.get_BSSIDs()) & set(node2.get_BSSIDs())) # list of common BSSID
+    node1_APs = {}  # {"BSSID1": rssi1, "BSSID2": rssi2}, clear for each interval
+    node2_APs = {}
 
     # TODO: test this part
     while t1_index < len(node1_timestamps): # go through all node1 timestamps, outer loop is one interval
-        node1_APs = {} # {"BSSID1": rssi1, "BSSID2": rssi2}, clear for each interval
-        node2_APs = {}
         while t1_index < len(node1_timestamps) and node1_timestamps[t1_index] < next_interval:
             #print("node1_timestamps: {}".format(node1_timestamps[t1_index]))
             # go through and get info, increment t1_index
@@ -451,7 +451,7 @@ def match_all_APs(node1, node2, threshold, interval=60):
                 else: # if that BSSID is already there, compare stored RSSIs and keep the bigger one
                     if node1_APs[BSSID] < tmp_data1[BSSID]:
                         node1_APs[BSSID] = tmp_data1[BSSID]
-            if t1_index < len(node1_timestamps) - 0:
+            if t1_index < len(node1_timestamps):
                 t1_index += 1
 
         while t2_index < len(node2_timestamps) and node2_timestamps[t2_index] < next_interval:
@@ -466,7 +466,7 @@ def match_all_APs(node1, node2, threshold, interval=60):
                 else:
                     if node2_APs[BSSID] < tmp_data2[BSSID]:
                         node2_APs[BSSID] = tmp_data2[BSSID]
-            if t2_index < len(node2_timestamps) - 0:
+            if t2_index < len(node2_timestamps):
                 t2_index += 1
 
         # TODO: compare matches
@@ -565,9 +565,8 @@ if __name__ == "__main__":
         node.import_data()
         nodes.append(node)
 
-    print("node[0].get_data(): {}".format(nodes[0].get_data()))
-
-    print("node[0].get_data2(): {}".format(nodes[0].get_data2()))
+    #print("node[0].get_data(): {}".format(nodes[0].get_data()))
+    #print("node[0].get_data2(): {}".format(nodes[0].get_data2()))
 
     BSSID_list = node.get_master_AP_list()["BSSID_list"]
 
