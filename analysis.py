@@ -504,7 +504,7 @@ def match_all_APs3(node1, node2, threshold=20, interval=60):
 
     # TODO: test this part
     while t1_index < len(node1_timestamps): # go through all node1 timestamps, outer loop is the "interval"
-        print("Interval -> {}".format(next_interval))
+        #print("Interval -> {}".format(next_interval))
         node1_APs = {}  # {"BSSID1": rssi1, "BSSID2": rssi2}, clear for each interval
         node2_APs = {}
         while t1_index < len(node1_timestamps) and node1_timestamps[t1_index] < next_interval:
@@ -530,25 +530,28 @@ def match_all_APs3(node1, node2, threshold=20, interval=60):
             t2_index += 1
 
         match_count = 0
-        print("Comparing: {}".format(node1_APs))
-        print(node2_APs)
+        #print("Comparing: {}".format(node1_APs))
+        #print(node2_APs)
         for BSSID in node1_APs:
             if BSSID in node2_APs:
-                print("Found BSSID: {} in both".format(BSSID),end="")
+                #print("Found BSSID: {} in both".format(BSSID),end="")
                 val = abs(node1_APs[BSSID] - node2_APs[BSSID])
                 if val < threshold:
                     match_count += 1
-                    print("--matched! diff: {}".format(val))
+                    #print("--matched! diff: {}".format(val))
                 else:
-                    print("--no match.. diff: {}".format(val))
+                    pass
+                    #print("--no match.. diff: {}".format(val))
+
             else:
-                print("BSSID: {} not in node2".format(BSSID))
+                pass
+                #print("BSSID: {} not in node2".format(BSSID))
         matches.append(match_count)
         intervals.append(next_interval)
         next_interval += interval
 
-    print("node1 APs: {} tmp_data1: {}".format(node1_APs,tmp_data1))
-    print("node2 APs: {} tmp_data2: {}".format(node2_APs,tmp_data2))
+    #print("node1 APs: {} tmp_data1: {}".format(node1_APs,tmp_data1))
+    #print("node2 APs: {} tmp_data2: {}".format(node2_APs,tmp_data2))
 
     return matches,intervals
 
@@ -578,7 +581,13 @@ def match_all_APs2(node1, node2, threshold=20, interval=60):
     return matches,intervals # for now these are different that what the original function returns
 
 
+def plot_matches(matches,intervals,devID="?",ax=None):
 
+    ax.scatter(intervals,matches, marker=".")
+
+    #ax.title("Device ID: {}".format(devID))
+    #ax.grid(axis='x', color='0.95')
+    #ax.show()
 
 # def write_timestamped_RSSI(device_list):
 # 	for devID in device_list:
@@ -640,13 +649,13 @@ if __name__ == "__main__":
     #                'e8db84c4c0b0', '3c6105d49ef8', '3c6105d3a726']
 
 
-    device_list = get_devIDs("data-Jan23")
+    device_list = get_devIDs("data-Jan12")
     print("device list: {}".format(device_list))
 
     nodes = []
     for devID in device_list:
         node = rxnode(devID)
-        node.import_data("data-Jan23")
+        node.import_data("data-Jan12")
         nodes.append(node)
 
     #print("node[0].get_data(): {}".format(nodes[0].get_data()))
@@ -654,19 +663,23 @@ if __name__ == "__main__":
 
     BSSID_list = node.get_master_AP_list()["BSSID_list"]
 
-    for node1 in nodes:
-        node1.print_num_APs()
+    # for node1 in nodes:
+    #     node1.print_num_APs()
 
     # Matching nodes
     # maybe check for missing intervals, create another list and include a number for how many measurements were in that
-    # for node1 in nodes:
-    #     for node2 in nodes:
-    #         if node1==node2:
-    #             continue
-    #         matches,intervals = match_all_APs3(node1,node2,threshold=20,interval=150)
-    #         print("Comparing dev {} and dev {}".format(node1.get_deviceID(),node2.get_deviceID()))
-    #         print(matches)
-    #         print(intervals)
+    fig,ax = plt.subplots()
+    for node1 in nodes:
+        for node2 in nodes:
+            if node1==node2:
+                continue
+            matches,intervals = match_all_APs3(node1,node2,threshold=10,interval=20)
+            print("Comparing dev {} and dev {}".format(node1.get_deviceID(),node2.get_deviceID()))
+            #print(matches)
+            #print(intervals)
+            plot_matches(matches,intervals,node1.get_deviceID(),ax)
+        fig.show()
+        plt.pause(4)
 
     #---plot measurements per AP
     for BSSID in BSSID_list:
