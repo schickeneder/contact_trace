@@ -1,5 +1,7 @@
 from analysis import *
 import pickle
+import matplotlib as mpl
+import numpy as np
 
 # This is a helper file to produce the match % vs RSSI threshold graphs
 
@@ -129,27 +131,40 @@ if __name__ == "__main__":
     interval = 10
     scatters = []
 
+    grades=50
+    vmax=12
+
     fig, ax = plt.subplots()
+    cmap = plt.get_cmap('jet', grades) # number of gradations in colormap
+    norm = mpl.colors.Normalize(vmin=0, vmax=vmax) # range of values for colormap
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    # fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+    #              cax=ax, orientation='horizontal', label='Some Units')
+    cbar = plt.colorbar(sm, ticks=[0,1,2,3,4,5,6,7,8,9,10,11,12]) #np.linspace(0, 35,5,dtype="int")) # (start,end,=count)
 
     # plot all
 
-    try:
-        f = open('saved_vars\\data_Feb09_difrms_thresh_res_all','rb')
-        res, threshold_list, match_list, totals_list = pickle.load(f)
-    except:
-        print("Pickle file not found, getting thresh_res_all")
-        threshold_list, match_list, totals_list = threshold_pair_comparison(device_list, device_list, nodes)
-        res = [i / j for i, j in zip(match_list, totals_list)]
-        f = open('saved_vars\\data_Feb09_difrms_thresh_res_all', 'wb')
-        pickle.dump((res, threshold_list, match_list, totals_list),f)
-        f.close()
+    # don't need this one
 
-    print("res_all")
-    for i in res:
-        print(i)
-
-    scatter = ax.scatter(threshold_list, res, label="diff_rm_All", marker=".")
-    scatters.append(scatter)
+    # try:
+    #     f = open('saved_vars\\data_Feb09_difrms_thresh_res_all','rb')
+    #     res, threshold_list, match_list, totals_list = pickle.load(f)
+    # except:
+    #     print("Pickle file not found, getting thresh_res_all")
+    #     threshold_list, match_list, totals_list = threshold_pair_comparison(device_list, device_list, nodes)
+    #     res = [i / j for i, j in zip(match_list, totals_list)]
+    #     f = open('saved_vars\\data_Feb09_difrms_thresh_res_all', 'wb')
+    #     pickle.dump((res, threshold_list, match_list, totals_list),f)
+    #     f.close()
+    #
+    # print("res_all")
+    # for i in res:
+    #     print(i)
+    #
+    # # this one is a composite
+    # scatter = ax.scatter(threshold_list, res, label="diff_rm_All", marker=".")
+    # scatters.append(scatter)
 
 
 
@@ -172,8 +187,9 @@ if __name__ == "__main__":
     for i in res:
         print(i)
 
-    scatter = ax.scatter(threshold_list, res, label="basmnt_lvr2tv", marker=".")
-    scatters.append(scatter)
+    # this is about 25 ft - actually 31ft 9.45m
+    scatter = ax.scatter(threshold_list, res, label="basmnt_lvr2tv~25", marker=".",c=cmap(9.45/vmax))
+    #scatters.append(scatter)
 
 
 
@@ -195,8 +211,9 @@ if __name__ == "__main__":
     for i in res:
         print(i)
 
-    scatter = ax.scatter(threshold_list, res, label="bsmnTV2mstrclst", marker=".")
-    scatters.append(scatter)
+    # this one is about 25 feet distance actual 24 ft 7.32m
+    scatter = ax.scatter(threshold_list, res, label="bsmnTV2mstrclst~25", marker=".",c=cmap(7.32/vmax))
+    #scatters.append(scatter)
 
     # plot c80a-2200+9ef8  kitchen to master bedroom closet
 
@@ -216,8 +233,9 @@ if __name__ == "__main__":
     for i in res:
         print(i)
 
-    scatter = ax.scatter(threshold_list, res, label="mstrclst2ktchn", marker=".")
-    scatters.append(scatter)
+    # this one is more than 30 ft actually 31 ft 9.45m
+    scatter = ax.scatter(threshold_list, res, label="mstrclst2ktchn-30+", marker=".",c=cmap(9.45/vmax))
+    #scatters.append(scatter)
 
     # plot 2200+9ef8-a726  ktchn to basment bdrm
 
@@ -237,8 +255,9 @@ if __name__ == "__main__":
     for i in res:
         print(i)
 
-    scatter = ax.scatter(threshold_list, res, label="kitchen2bsmbrdm", marker=".")
-    scatters.append(scatter)
+    # less than 15 ft actual 14.5ft 4.42m
+    scatter = ax.scatter(threshold_list, res, label="kitchen2bsmbrdm-15-", marker=".",c=cmap(4.42/vmax))
+    #scatters.append(scatter)
 
     # plot 7067+c0b0-2200+9ef8  bsmnttv 2 kitcn
 
@@ -258,8 +277,9 @@ if __name__ == "__main__":
     for i in res:
         print(i)
 
-    scatter = ax.scatter(threshold_list, res, label="bsmnttv2ktchn", marker=".")
-    scatters.append(scatter)
+    # more than 30 ft actual 35 ft 10.67m
+    scatter = ax.scatter(threshold_list, res, label="bsmnttv2ktchn-30+", marker=".",c=cmap(10.67/vmax))
+    #scatters.append(scatter)
 
 
     # plot Jan23_all  control for all
@@ -282,12 +302,14 @@ if __name__ == "__main__":
     for i in res:
         print(i)
 
-    scatter = ax.scatter(threshold_list, res, label="Jan23_all", marker=".")
+    # should be 0.3m
+    scatter = ax.scatter(threshold_list, res, label="Control Series", marker=".",c=cmap(0.3/vmax))
     scatters.append(scatter)
-
-
-    plt.title("Threshold Matches")
-    ax.legend(handles=scatters, loc="lower right", title="datasets")
+    plt.xlabel("RSSI Match Threshold (dB)")
+    plt.ylabel("Ratio of Matches")
+    plt.title("Indoor Threshold Comparison")
+    cbar.set_label('Relative Distance (m)', rotation=270)
+    ax.legend(handles=scatters, loc="lower right")
     plt.show()
 
 
