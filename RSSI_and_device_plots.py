@@ -3,10 +3,10 @@ import pickle
 import matplotlib as mpl
 import numpy as np
 
-# This is a helper file to produce the match % vs RSSI threshold graphs DONE!
+# This is a helper file to produce the match % vs RSSI threshold graphs
 
-threshold = 53
-interval = 10
+threshold = 20
+interval = 30
 #data_path = "data_Jan13_difrms"
 # device list: ['3c6105d37067', 'e8db84c4c80a', 'e8db84c62200', '3c6105d41631', 'e8db84c620b1',
 # '3c6105d37f73', 'e8db84c4c0b0', '3c6105d49ef8', '3c6105d3a726']
@@ -44,13 +44,43 @@ def get_matches_2_nodes(devID1,devID2,nodes):
                     #print("totals: {}/{}".format(sum(matches),sum(totals)))
                     return matches,intervals,totals
 
+def plot_matches_formatted(matches,intervals,totals,devID="?",ax=None):
+    scatters = []
 
-# device list: ['737fd300', '6770d300', '3116d400', '0022c600', '0ac8c400', 'b120c600', 'b0c0c400', '26a7d300']
+    scatter = ax.scatter(intervals, totals, label="Max Possible", marker="o")
+    scatters.append(scatter)
+    print(totals)
+
+    scatter = ax.scatter(intervals, matches, label="Actual", marker=".")
+    scatters.append(scatter)
+    print(matches)
+
+
+
+    plt.title("Device: {}".format(devID))
+    ax.legend(handles=scatters, loc="lower right", title="Matches")
+
+
+
+
 def plot_matches_2_nodes(devID1,devID2, nodes):
     fig,ax = plt.subplots()
-    matches,intervals,_ = get_matches_2_nodes(devID1,devID2,nodes)
-    plot_matches(matches,intervals,"",ax)
-    plt.title("Matches between {} and {}".format(devID1,devID2))
+    matches,intervals,totals = get_matches_2_nodes(devID1,devID2,nodes)
+    plot_matches_formatted(matches,intervals,totals,"",ax)
+    title = "Devices: {},{} - RSSI Threshold: {}".format(devID1[8:],devID2[8:],threshold)
+    plt.title(title)
+    plt.xlabel("Time")
+    plt.ylabel("Number of Matches")
+
+    plt.tick_params(
+        axis='x',  # changes apply to the x-axis
+        which='both',  # both major and minor ticks are affected
+        bottom=False,  # ticks along the bottom edge are off
+        top=False,  # ticks along the top edge are off
+        labelbottom=False)  # labels along the bottom edge are off
+    ax.set_yticks([0,2,4,6,8,10,12,14,16,18,20])
+    filename = "Devices{}-{}_RSSI{}".format(devID1[8:],devID2[8:],threshold) + ".png"
+    plt.savefig(filename,dpi=300)
     fig.show()
 
 #self.data = {}  # contains all measurements organized like:
@@ -64,8 +94,17 @@ def plot_all_APs_node(node):
         scatter = ax.scatter(data[BSSID]["timestamps"], data[BSSID]["RSSI_list"], label=BSSID + " " + SSID, marker=".")
         scatters.append(scatter)
 
-    plt.title("Device: {}".format(node.get_deviceID()))
-    ax.legend(handles=scatters, loc="lower left", title="BSSIDs")
+    plt.xlabel("Time")
+
+    plt.tick_params(
+        axis='x',  # changes apply to the x-axis
+        which='both',  # both major and minor ticks are affected
+        bottom=False,  # ticks along the bottom edge are off
+        top=False,  # ticks along the top edge are off
+        labelbottom=False)  # labels along the bottom edge are off
+
+    plt.title("Device: {}".format(node.get_deviceID())[8:])
+    #ax.legend(handles=scatters, loc="lower left", title="Matches")
     plt.show()
 
 
@@ -100,26 +139,55 @@ def threshold_pair_comparison(nodelist1,nodelist2,nodes):
 if __name__ == "__main__":
     print("Running main")
 
-
-    data_path = "data_Feb09_difrms" # "26Jan_testing - phones" "data_Jan23_all"
+    data_path = "data_Jan23_all"
     device_list = get_devIDs(data_path)
 
+
     try:
-        f = open('saved_vars\\data_Feb09_difrms_nodes','rb')
+        f = open('saved_vars\\data_Jan23_all','rb')
         nodes = pickle.load(f)
     except:
         print("Pickle file not found, building nodes")
+        data_path = "data_Jan23_all"
         nodes = get_nodes()
-        f = open('saved_vars\\data_Feb09_difrms_nodes', 'wb')
+        f = open('saved_vars\\data_Jan23_all', 'wb')
         pickle.dump(nodes,f)
         f.close()
 
+# ************************** Plot matches for nodes ****************************
+    # pick just two representative samplmes to compare
+    # good performing: c0b0 and a726
+    # bad performing: 7067 and 20b1
+    # ['3c6105d37067', 'e8db84c4c80a', 'e8db84c62200', '3c6105d41631', 'e8db84c620b1',
+    # # '3c6105d37f73', 'e8db84c4c0b0', '3c6105d49ef8', '3c6105d3a726']
+
+    pause_count = 0
+    all_matches = 0
+    all_totals = 0
+
+    matches, intervals, totals = get_matches_2_nodes('e8db84c4c0b0','3c6105d3a726', nodes)
+    plot_matches_2_nodes('e8db84c4c0b0','3c6105d3a726', nodes)
+
+    matches, intervals, totals = get_matches_2_nodes('3c6105d37067','e8db84c620b1', nodes)
+    plot_matches_2_nodes('3c6105d37067','e8db84c620b1', nodes)
+
+    print("All matches/totals for:")
+    print(all_matches,all_totals)
 
 
-    print("device list: {}".format(device_list))
 
-    BSSID_list = nodes[0].get_master_AP_list()["BSSID_list"]
 
+# *********************** plot all Aps for one node ***************************
+
+    for node in nodes:
+        # TODO: BSSID list doesn't seem to be right, use get_data().keys() instead..
+        BSSID_list,_,_ = node.get_AP_list()
+        print(len(node.get_data().keys()))
+        print(len(BSSID_list))
+        plot_all_APs_node(node)
+        break
+
+# ********************************************************************************
 
 
 
@@ -310,7 +378,6 @@ if __name__ == "__main__":
     plt.title("Indoor Threshold Comparison")
     cbar.set_label('Relative Distance (m)', rotation=270)
     ax.legend(handles=scatters, loc="lower right")
-    plt.savefig("Indoor Threshold Comparison.png",dpi=300)
     plt.show()
 
 

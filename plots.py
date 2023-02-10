@@ -45,9 +45,10 @@ def get_matches_2_nodes(devID1,devID2,nodes):
 # device list: ['737fd300', '6770d300', '3116d400', '0022c600', '0ac8c400', 'b120c600', 'b0c0c400', '26a7d300']
 def plot_matches_2_nodes(devID1,devID2, nodes):
     fig,ax = plt.subplots()
-    matches,intervals,_ = get_matches_2_nodes(devID1,devID2,nodes)
+    matches,intervals,totals = get_matches_2_nodes(devID1,devID2,nodes)
     plot_matches(matches,intervals,"",ax)
     plt.title("Matches between {} and {}".format(devID1,devID2))
+    print(matches,intervals,totals)
     fig.show()
 
 #self.data = {}  # contains all measurements organized like:
@@ -68,7 +69,7 @@ def plot_all_APs_node(node):
 
 if __name__ == "__main__":
     print("Running main")
-    data_path = "data_Feb09_difrms" # "26Jan_testing - phones" "data_Jan23_all"
+    data_path = "data_Jan23_all" #"data_Feb09_difrms" # "26Jan_testing - phones" "data_Jan23_all"
     device_list = get_devIDs(data_path)
 
     nodes = get_nodes()
@@ -117,8 +118,8 @@ if __name__ == "__main__":
             matches, intervals, totals = get_matches_2_nodes(node1.get_deviceID(),node2.get_deviceID(), nodes)
             all_matches += sum(matches)
             all_totals += sum(totals)
-            #plot_matches_2_nodes(node1.get_deviceID(),node2.get_deviceID(), nodes)
-            #plt.pause(2)
+            plot_matches_2_nodes(node1.get_deviceID(),node2.get_deviceID(), nodes)
+            plt.pause(2)
 
     print("All matches/totals for:")
     print(all_matches,all_totals)
