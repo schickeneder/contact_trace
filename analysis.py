@@ -2,6 +2,8 @@ import os
 import json
 from statistics import variance, mean
 import matplotlib.pyplot as plt
+from datetime import datetime
+import time
 from numpy.random import randint
 
 # Python version: '3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]'
@@ -47,6 +49,38 @@ class rxnode:
 
     def get_deviceID(self):
         return self.devID
+
+    # imports CSV output from wiglnet format like:
+    # MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type
+    # d6:35:1d:56:bb:20,ChatelainHouse,[WPA2-PSK-CCMP][ESS][WPS],2023-01-26 10:03:57,1,-80,40.67675911,
+    # -111.8146263,1401.6903076171875,5.360000133514404,WIFI
+    def import_data_wigle(self,filepath="data"):
+        pattern = '%Y-%m-%d %H:%M:%S' # pattern for timestamp
+
+        with open(filepath, 'r') as f:
+            f.readline() # skip first two lines because it contains .csv headers
+            f.readline()
+            for line in f:
+                entry = line.strip("\n").split(',')
+                if entry[-1] == "WIFI": # then it is an entry we want, otherwise ignore
+                    timestamp = int(time.mktime(datetime.strptime(entry[3],pattern).timetuple()))
+                    #print("Before: {} After: {}".format(entry[3],timestamp))
+                    if timestamp < self.min_time:
+                        self.min_time = timestamp
+                    if timestamp > self.max_time:
+                        self.max_time = timestamp
+                    self.data2[timestamp] = {}  # don't need to check because each time entry should be unique
+                    BSSID = entry[0]
+                    SSID = entry[1]
+                    RSSI = int(entry[5])
+                    channel = entry[4]
+                    if BSSID not in self.data: # create new entry
+                        self.data[BSSID] = {"SSID": SSID,"channel": channel,
+                                            "RSSI_list": [],"timestamps": []}
+                    if timestamp > 1600000000: # we don't want it to include data with invalid timestamps
+                        self.data[BSSID]["RSSI_list"].append(RSSI)
+                        self.data[BSSID]["timestamps"].append(timestamp)
+                        self.data2[timestamp][BSSID] = RSSI # enter timestamp, BSSID and RSSI
 
     # imports data for this devID from filepath
     # protocol version describes which file format to use for import, default is "0" which is what we used for nodeMCUs
@@ -282,9 +316,9 @@ def write_CSV_RSSI(device_list):
 
 
 # plots all RSSI measurements for each BSSID in one figure for the given deviceID
-def plot_device_all_APs(deviceID):
+def plot_device_all_APs(deviceID,datapath="data"):
     RSSI_dict = {}
-    raw_data = import_all_data_one_device("data", deviceID)
+    raw_data = import_all_data_one_device(datapath, deviceID)
     data_list = parse_data(raw_data)
 
     BSSID_list, SSID_list, channel_list = get_APs(data_list)
@@ -365,16 +399,19 @@ def plot_all_APs(RSSI_dict, SSID):
 
 # rxnode-object based version of plot all APs, plots all RSSI measurements for one BSSID from all devices
 def plot_AP_across_devices(node_list,BSSID):
+    print("Plotting {}".format(BSSID))
     for node in node_list:
+        print("Processing node: {}".format(node))
         AP_data = node.get_data_for_BSSID(BSSID)
         if AP_data: # if the node contained data for that AP
-            plt.plot(AP_data["timestamps"][10:50],AP_data["RSSI_list"][10:50], marker=".")
+            plt.plot(AP_data["timestamps"],AP_data["RSSI_list"], marker=".")
             SSID = AP_data["SSID"]
 
     plt.title("BSSID: {} - {}".format(BSSID, SSID))
     plt.grid(axis='x', color='0.95',markevery=(0.5,0.1))
     plt.show()
     plt.pause(0.001)
+    print("Done")
 
 # returns corrected variance over selected intervals with the average of each interval shifted to 0
 # inputs timestamps and RSSI and sampling interval
@@ -474,7 +511,6 @@ def match_all_APs(node1, node2, threshold=20, interval=60):
             if t2_index < len(node2_timestamps):
                 t2_index += 1
 
-        # TODO: compare matches
         match_count = 0
         for BSSID in node1_APs:
             if BSSID in node2_APs:
@@ -494,6 +530,7 @@ def match_all_APs(node1, node2, threshold=20, interval=60):
 def match_all_APs3(node1, node2, threshold=20, interval=60):
     intervals = [] # stores the timestamp of each interval, i.e. a decimation of dev_timestamps
     matches = [] # stores the number of matches in each interval
+    totals = [] # stores total possible i.e. total number of APs observed by both nodes during interval
     node1_timestamps = list(node1.get_data2().keys())
     node2_timestamps = list(node2.get_data2().keys())
     t1_index = 0
@@ -530,11 +567,13 @@ def match_all_APs3(node1, node2, threshold=20, interval=60):
             t2_index += 1
 
         match_count = 0
+        total_count = 0
         #print("Comparing: {}".format(node1_APs))
         #print(node2_APs)
         for BSSID in node1_APs:
             if BSSID in node2_APs:
                 #print("Found BSSID: {} in both".format(BSSID),end="")
+                #print(node1_APs[BSSID],node2_APs[BSSID])
                 val = abs(node1_APs[BSSID] - node2_APs[BSSID])
                 if val < threshold:
                     match_count += 1
@@ -542,18 +581,20 @@ def match_all_APs3(node1, node2, threshold=20, interval=60):
                 else:
                     pass
                     #print("--no match.. diff: {}".format(val))
+                total_count += 1
 
             else:
                 pass
                 #print("BSSID: {} not in node2".format(BSSID))
         matches.append(match_count)
+        totals.append(total_count)
         intervals.append(next_interval)
         next_interval += interval
 
     #print("node1 APs: {} tmp_data1: {}".format(node1_APs,tmp_data1))
     #print("node2 APs: {} tmp_data2: {}".format(node2_APs,tmp_data2))
 
-    return matches,intervals
+    return matches,intervals,totals
 
 # This is another approach with more metrics, but runs slower
 # this way is too slow...
@@ -649,13 +690,13 @@ if __name__ == "__main__":
     #                'e8db84c4c0b0', '3c6105d49ef8', '3c6105d3a726']
 
 
-    device_list = get_devIDs("data-Jan12")
+    device_list = get_devIDs("data_Jan12")
     print("device list: {}".format(device_list))
 
     nodes = []
     for devID in device_list:
         node = rxnode(devID)
-        node.import_data("data-Jan12")
+        node.import_data("data_Jan12")
         nodes.append(node)
 
     #print("node[0].get_data(): {}".format(nodes[0].get_data()))
@@ -668,18 +709,18 @@ if __name__ == "__main__":
 
     # Matching nodes
     # maybe check for missing intervals, create another list and include a number for how many measurements were in that
-    fig,ax = plt.subplots()
-    for node1 in nodes:
-        for node2 in nodes:
-            if node1==node2:
-                continue
-            matches,intervals = match_all_APs3(node1,node2,threshold=10,interval=20)
-            print("Comparing dev {} and dev {}".format(node1.get_deviceID(),node2.get_deviceID()))
-            #print(matches)
-            #print(intervals)
-            plot_matches(matches,intervals,node1.get_deviceID(),ax)
-        fig.show()
-        plt.pause(4)
+    # fig,ax = plt.subplots()
+    # for node1 in nodes:
+    #     for node2 in nodes:
+    #         if node1==node2:
+    #             continue
+    #         matches,intervals = match_all_APs3(node1,node2,threshold=10,interval=20)
+    #         print("Comparing dev {} and dev {}".format(node1.get_deviceID(),node2.get_deviceID()))
+    #         #print(matches)
+    #         #print(intervals)
+    #         plot_matches(matches,intervals,node1.get_deviceID(),ax)
+    #     fig.show()
+    #     plt.pause(4)
 
     #---plot measurements per AP
     for BSSID in BSSID_list:
